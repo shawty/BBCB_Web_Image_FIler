@@ -1,0 +1,15 @@
+[
+  { "name": "MODE0.bin", "description": "Mode 0 test screen", "mode": 0 },
+  { "name": "MODE1.bin", "description": "Mode 1 test screen", "mode": 1 },
+  { "name": "MODE2.bin", "description": "Mode 2 test screen", "mode": 2 },
+  { "name": "MODE4.bin", "description": "Mode 4 test screen", "mode": 4 },
+  { "name": "MODE5.bin", "description": "Mode 5 test screen", "mode": 5 },
+  { "name": "4_SCR1_5800_5800.bin", "description": "Dreamscape Demo Part 3 Screen 1", "mode": 4 },
+  { "name": "4_SCR2_5800_5800.bin", "description": "Dreamscape Demo Part 3 Screen 2", "mode": 4 },
+  { "name": "2_SCR1_4680_4680.bin", "description": "Dreamscape Demo Intro Screen 1", "mode": 2 },
+  { "name": "2_SCR2_4680_4680.bin", "description": "Dreamscape Demo Intro Screen 2", "mode": 2 },
+  { "name": "2_SCR3_4680_4680.bin", "description": "Dreamscape Demo Intro Screen 3", "mode": 2 },
+  { "name": "2_SCR4_4680_4680.bin", "description": "Dreamscape Demo Intro Screen 4", "mode": 2 },
+  { "name": "2_SCR5_4680_4680.bin", "description": "Dreamscape Demo Intro Screen 5", "mode": 2 },
+  { "name": "2_SCR6_4680_4680.bin", "description": "Dreamscape Demo Intro Screen 6", "mode": 2 }
+]

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>BBC Screen Dump Displayer</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    .hidden {
+      display: none;
+    }
+
+    .flexContainer {
+      display: flex;
+      align-items: center;
+      margin-top: 20px;
+    }
+
+    .spacer {
+      -ms-flex: 1;
+      -webkit-flex: 1;
+      flex: 1;
+    }
+
+    .flexItem {
+    }
+
+    .removeMarginsAndPadding {
+      padding: 0;
+      margin: 0;
+    }
+
+    .canvas {
+      border: 1px solid green;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+
+    <div class="page-header">
+      <h1>BBC Screen Image Filer <small>by !Shawty!</small></h1>
+    </div>
+
+    <div id="availableScreens">
+
+      <h3>
+        Available screens <small id="screensLoading">Loading...</small>
+      </h3>
+
+      <table id="screensTable" class="table table-bordered">
+        <thead>
+          <tr>
+            <th>File Name</th>
+            <th>Description</th>
+            <th>Screen Mode</th>
+            <th>&nbsp;</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+    </div>
+
+    <div class="row">
+      <div class="col-md-2"><button class="btn btn-success" onclick="loadScreensTable()">Reload Images</button></div>
+      <div class="col-md-10"><b class="text-info">If you want to save the converted screen, right click on the image below and save image.</b></div>
+    </div>
+
+    <h4>Screen</h4>
+    <div id="screenView">
+
+      <div id="imageHolder"></div>
+
+    </div>
+
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+  <script>
+
+    var modeTable = {
+      // Note: the colours entry maps to the hash entry in the palettes table
+      // NOTE2: MODE7 is Not decoded by this script, only graphics modes.
+      0: { width: 640, height: 256, colors: 2, charsX: 80, charsY: 32, bits: 1 },
+      1: { width: 320, height: 256, colors: 4, charsX: 40, charsY: 32, bits: 2 },
+      2: { width: 160, height: 256, colors: 16, charsX: 20, charsY: 32, bits: 4 },
+      3: { width: 0,   height: 0,   colors: 2, charsX: 80, charsY: 25, bits: 1 },
+      4: { width: 320, height: 256, colors: 2, charsX: 40, charsY: 32, bits: 1 },
+      5: { width: 160, height: 256, colors: 4, charsX: 20, charsY: 32, bits: 2 },
+      6: { width: 0,   height: 0,   colors: 2, charsX: 40, charsY: 25, bits: 1 },
+    };
+
+    var colorPalettes = { // Arrays are RGBA format
+      2: [
+        [ 0, 0, 0, 255 ],      // 0 = Black
+        [ 255, 255, 255, 255 ] // 1 = White
+      ],
+      4: [
+        [ 0, 0, 0, 255 ],      // 0 = Black
+        [ 255, 0, 0, 255 ],    // 1 = Red
+        [ 255, 255, 0, 255 ],  // 2 = Yellow
+        [ 255, 255, 255, 255 ] // 3 = White
+      ],
+      16: [
+        [ 0, 0, 0, 255 ],       // 0 = Black
+        [ 255, 0, 0, 255 ],     // 1 = Red
+        [ 0, 255, 0, 255 ],     // 2 = Green
+        [ 255, 255, 0, 255 ],   // 3 = Yellow
+        [ 0, 0, 255, 255 ],     // 4 = Blue
+        [ 255, 0, 255, 255 ],   // 5 = Magenta
+        [ 0, 255, 255, 255 ],   // 6 = Cyan
+        [ 255, 255, 255, 255 ], // 7 = White
+
+        // Can't support flashing colours in a 24bpp pixel map, so we just repeat the first 16 colours
+        [ 0, 0, 0, 255 ],       // 0 = Black
+        [ 255, 0, 0, 255 ],     // 1 = Red
+        [ 0, 255, 0, 255 ],     // 2 = Green
+        [ 255, 255, 0, 255 ],   // 3 = Yellow
+        [ 0, 0, 255, 255 ],     // 4 = Blue
+        [ 255, 0, 255, 255 ],   // 5 = Magenta
+        [ 0, 255, 255, 255 ],   // 6 = Cyan
+        [ 255, 255, 255, 255 ], // 7 = White
+      ]
+    }
+
+    var canvasId = "";
+    var linearScreenData = null;
+
+    function hideElement(element)
+    {
+      $('#' + element).hide();
+    }
+
+    function showElement(element)
+    {
+      $('#' + element).show();
+    }
+
+    function loadScreensTable()
+    {
+      hideElement('screensTable');
+      showElement('screensLoading');
+      $('#screensTable tbody').empty();
+      networkGet("screens.json")
+        .then(function (data)
+        {
+
+          data.forEach(function (dataItem)
+          {
+
+            var newTableLine = "<tr><td>" +
+              dataItem.name +
+              "</td><td>" +
+              dataItem.description +
+              "</td><td>" +
+              dataItem.mode +
+              "</td><td>" +
+              '<button type="button" class="btn btn-primary btn-xs" onclick="viewScreen(\'' + dataItem.name + '\',' + dataItem.mode + ')">View</button>&nbsp;' +
+              '<button type="button" class="btn btn-success btn-xs" onclick="downloadRawScreen(\'' + dataItem.name + '\')">Download Unconverted</button>' +
+              "</td></tr>";
+
+            $('#screensTable tbody').append(newTableLine);
+
+          });
+          showElement('screensTable');
+          hideElement('screensLoading');
+
+        })
+        .fail(function (xhr)
+        {
+          alert("ERROR: Failed to load 'screens.json' with error code " + xhr.status);
+        });
+    }
+
+    function viewScreen(screenName, screenMode)
+    {
+      createEmptyCanvas(screenMode);
+      networkGetBinaryBlob("screens/" + screenName)
+        .then(function(data) {
+          unpackScreenDataToLinearArray(data, screenMode);
+        });
+    }
+
+    function unpackScreenDataToLinearArray(packedInputData, screenMode)
+    {
+      switch(screenMode)
+      {
+        case 0:
+          unpackOneBitColor(packedInputData, screenMode);
+          break;
+
+        case 1:
+          unpackTwoBitColor(packedInputData, screenMode);
+          break;
+
+        case 2:
+          unpackFourBitColor(packedInputData, screenMode);
+          break;
+
+        case 3:
+          unpackTwoBitColor(packedInputData, screenMode);
+          break;
+
+        case 4:
+          unpackOneBitColor(packedInputData, screenMode);
+          break;
+
+        case 5:
+          unpackTwoBitColor(packedInputData, screenMode);
+          break;
+
+        case 6:
+          unpackTwoBitColor(packedInputData, screenMode);
+          break;
+    
+      }
+    }
+
+    function unpackOneBitColor(packedInputData, screenMode)
+    {
+      var modeInfo = modeTable[screenMode];
+      var canvasElement = document.getElementById(canvasId);
+      var context = canvasElement.getContext("2d");
+      var canvasData = context.getImageData(0, 0, canvasElement.width, canvasElement.height);
+      var canvasBytes = canvasData.data;
+      var lineStride = modeInfo.width * 4; // Output image is RGBA so 4 8bit bytes per pixel
+
+      var packedDataOffset = 0;
+      var destinationOffset = 0;
+
+      for(var yCharCount = 0; yCharCount < modeInfo.charsY; yCharCount++ )
+      {
+        for(var xCharCount = 0; xCharCount < (modeInfo.charsX * modeInfo.bits); xCharCount++ )
+        {
+          var charBytes = new Uint8Array(packedInputData, packedDataOffset, 8);
+
+          var rowOne =   decodeOneBitByte(charBytes, 0, modeInfo);
+          var rowTwo =   decodeOneBitByte(charBytes, 1, modeInfo);
+          var rowThree = decodeOneBitByte(charBytes, 2, modeInfo);
+          var rowFour =  decodeOneBitByte(charBytes, 3, modeInfo);
+          var rowFive =  decodeOneBitByte(charBytes, 4, modeInfo);
+          var rowSix =   decodeOneBitByte(charBytes, 5, modeInfo);
+          var rowSeven = decodeOneBitByte(charBytes, 6, modeInfo);
+          var rowEight = decodeOneBitByte(charBytes, 7, modeInfo);
+      
+          canvasBytes.set(rowOne, (lineStride * 0) + destinationOffset);
+          canvasBytes.set(rowTwo,   (lineStride * 1) + destinationOffset);
+          canvasBytes.set(rowThree, (lineStride * 2) + destinationOffset);
+          canvasBytes.set(rowFour,  (lineStride * 3) + destinationOffset);
+          canvasBytes.set(rowFive,  (lineStride * 4) + destinationOffset);
+          canvasBytes.set(rowSix,   (lineStride * 5) + destinationOffset);
+          canvasBytes.set(rowSeven, (lineStride * 6) + destinationOffset);
+          canvasBytes.set(rowEight, (lineStride * 7) + destinationOffset);
+
+          packedDataOffset = packedDataOffset + 8;
+          destinationOffset = destinationOffset + (4 * 8); // RGBA in the screen buffer times 8 pixels
+        }
+        destinationOffset = destinationOffset + (lineStride * 7);
+      }
+      context.putImageData(canvasData, 0, 0);
+    }
+
+    function decodeOneBitByte(blockData, blockIndex, modeInfo)
+    {
+      var result = 
+        colorPalettes[modeInfo.colors][(blockData[blockIndex] & 0x80) >> 7]
+        .concat(colorPalettes[modeInfo.colors][(blockData[blockIndex] & 0x40) >> 6])
+        .concat(colorPalettes[modeInfo.colors][(blockData[blockIndex] & 0x20) >> 5])
+        .concat(colorPalettes[modeInfo.colors][(blockData[blockIndex] & 0x10) >> 4])
+        .concat(colorPalettes[modeInfo.colors][(blockData[blockIndex] & 0x08) >> 3])
+        .concat(colorPalettes[modeInfo.colors][(blockData[blockIndex] & 0x04) >> 2])
+        .concat(colorPalettes[modeInfo.colors][(blockData[blockIndex] & 0x02) >> 1])
+        .concat(colorPalettes[modeInfo.colors][(blockData[blockIndex] & 0x01)]);
+      return result;
+    }
+
+    function unpackTwoBitColor(packedInputData, screenMode)
+    {
+      var modeInfo = modeTable[screenMode];
+      var canvasElement = document.getElementById(canvasId);
+      var context = canvasElement.getContext("2d");
+      var canvasData = context.getImageData(0, 0, canvasElement.width, canvasElement.height);
+      var canvasBytes = canvasData.data;
+      var lineStride = modeInfo.width * 4; // Output image is RGBA so 4 8bit bytes per pixel
+
+      var packedDataOffset = 0;
+      var destinationOffset = 0;
+
+      for(var yCharCount = 0; yCharCount < modeInfo.charsY; yCharCount++ )
+      {
+        for(var xCharCount = 0; xCharCount < (modeInfo.charsX * modeInfo.bits); xCharCount++ )
+        {
+          var charBytes = new Uint8Array(packedInputData, packedDataOffset, 8);
+
+          var rowOne =   decodeTwoBitByte(charBytes, 0, modeInfo);
+          var rowTwo =   decodeTwoBitByte(charBytes, 1, modeInfo);
+          var rowThree = decodeTwoBitByte(charBytes, 2, modeInfo);
+          var rowFour =  decodeTwoBitByte(charBytes, 3, modeInfo);
+          var rowFive =  decodeTwoBitByte(charBytes, 4, modeInfo);
+          var rowSix =   decodeTwoBitByte(charBytes, 5, modeInfo);
+          var rowSeven = decodeTwoBitByte(charBytes, 6, modeInfo);
+          var rowEight = decodeTwoBitByte(charBytes, 7, modeInfo);
+      
+          canvasBytes.set(rowOne, (lineStride * 0) + destinationOffset);
+          canvasBytes.set(rowTwo,   (lineStride * 1) + destinationOffset);
+          canvasBytes.set(rowThree, (lineStride * 2) + destinationOffset);
+          canvasBytes.set(rowFour,  (lineStride * 3) + destinationOffset);
+          canvasBytes.set(rowFive,  (lineStride * 4) + destinationOffset);
+          canvasBytes.set(rowSix,   (lineStride * 5) + destinationOffset);
+          canvasBytes.set(rowSeven, (lineStride * 6) + destinationOffset);
+          canvasBytes.set(rowEight, (lineStride * 7) + destinationOffset);
+
+          packedDataOffset = packedDataOffset + 8;
+          destinationOffset = destinationOffset + (4 * 4); // RGBA in the screen buffer times 4 pixels
+        }
+        destinationOffset = destinationOffset + (lineStride * 7);
+      }
+      context.putImageData(canvasData, 0, 0);
+
+    }
+
+    function decodeTwoBitByte(blockData, blockIndex, modeInfo)
+    {
+      var bottomNibble = blockData[blockIndex] & 0x0F;
+      var topNibble = (blockData[blockIndex] & 0xF0) >> 4;
+
+      var pix1 = ((topNibble & 0x01) << 1) + (bottomNibble & 0x01);
+      var pix2 = (topNibble & 0x02) + ((bottomNibble & 0x02) >> 1);
+      var pix3 = ((topNibble & 0x04) >> 1) + ((bottomNibble & 0x04) >> 2);
+      var pix4 = ((topNibble & 0x08) >> 2) + ((bottomNibble & 0x08) >> 3);
+
+      var result = 
+        colorPalettes[modeInfo.colors][pix4]
+        .concat(colorPalettes[modeInfo.colors][pix3])
+        .concat(colorPalettes[modeInfo.colors][pix2])
+        .concat(colorPalettes[modeInfo.colors][pix1])
+      return result;
+    }
+
+    function unpackFourBitColor(packedInputData, screenMode)
+    {
+      var modeInfo = modeTable[screenMode];
+      var canvasElement = document.getElementById(canvasId);
+      var context = canvasElement.getContext("2d");
+      var canvasData = context.getImageData(0, 0, canvasElement.width, canvasElement.height);
+      var canvasBytes = canvasData.data;
+      var lineStride = modeInfo.width * 4; // Output image is RGBA so 4 8bit bytes per pixel
+
+      var packedDataOffset = 0;
+      var destinationOffset = 0;
+
+      for(var yCharCount = 0; yCharCount < modeInfo.charsY; yCharCount++ )
+      {
+        for(var xCharCount = 0; xCharCount < (modeInfo.charsX * modeInfo.bits); xCharCount++ )
+        {
+          var charBytes = new Uint8Array(packedInputData, packedDataOffset, 8);
+
+          var rowOne =   decodeFourBitByte(charBytes, 0, modeInfo);
+          var rowTwo =   decodeFourBitByte(charBytes, 1, modeInfo);
+          var rowThree = decodeFourBitByte(charBytes, 2, modeInfo);
+          var rowFour =  decodeFourBitByte(charBytes, 3, modeInfo);
+          var rowFive =  decodeFourBitByte(charBytes, 4, modeInfo);
+          var rowSix =   decodeFourBitByte(charBytes, 5, modeInfo);
+          var rowSeven = decodeFourBitByte(charBytes, 6, modeInfo);
+          var rowEight = decodeFourBitByte(charBytes, 7, modeInfo);
+      
+          canvasBytes.set(rowOne, (lineStride * 0) + destinationOffset);
+          canvasBytes.set(rowTwo,   (lineStride * 1) + destinationOffset);
+          canvasBytes.set(rowThree, (lineStride * 2) + destinationOffset);
+          canvasBytes.set(rowFour,  (lineStride * 3) + destinationOffset);
+          canvasBytes.set(rowFive,  (lineStride * 4) + destinationOffset);
+          canvasBytes.set(rowSix,   (lineStride * 5) + destinationOffset);
+          canvasBytes.set(rowSeven, (lineStride * 6) + destinationOffset);
+          canvasBytes.set(rowEight, (lineStride * 7) + destinationOffset);
+
+          packedDataOffset = packedDataOffset + 8;
+          destinationOffset = destinationOffset + (4 * 2); // RGBA in the screen buffer times 2 pixels
+        }
+        destinationOffset = destinationOffset + (lineStride * 7);
+      }
+      context.putImageData(canvasData, 0, 0);
+
+    }
+
+    function decodeFourBitByte(blockData, blockIndex, modeInfo)
+    {
+      var bottomFirstHalfNibble = (blockData[blockIndex] & 0x0C) >> 2;
+      var bottomSecondHalfNibble = blockData[blockIndex] & 0x03;
+
+      var topFirstHalfNibble = (blockData[blockIndex] & 0xC0) >> 6;
+      var topSecondHalfNibble = (blockData[blockIndex] & 0x30) >> 4;
+
+      var pix1 = ((topFirstHalfNibble & 0x02) + ((topSecondHalfNibble & 0x02) >> 1) << 2) + (bottomFirstHalfNibble & 0x02) + ((bottomSecondHalfNibble & 0x02) >> 1);
+      var pix2 = ((((topFirstHalfNibble & 0x01) << 1) + (topSecondHalfNibble & 0x01)) << 2) + (((bottomFirstHalfNibble & 0x01) << 1) + (bottomSecondHalfNibble & 0x01));
+
+      var result = 
+        colorPalettes[modeInfo.colors][pix1]
+        .concat(colorPalettes[modeInfo.colors][pix2])
+      return result;
+    }
+
+    function xyToLinearOffset(x, y, screenMode)
+    {
+      var modeInfo = modeTable[screenMode];
+      var result = (y * modeInfo.width) + x;
+    }
+
+    function goBackToAvailableScreens()
+    {
+      showElement('availableScreens');
+      //hideElement('diskContents');
+      loadScreensTable();
+    }
+
+    function downloadRawScreen(screenName)
+    {
+      var screenPath = "screens/" + screenName;
+
+      networkGetBinaryBlob(screenPath)
+        .then(function (binaryDiskBlob)
+        {
+    debugger;
+          downloadBinaryData(screenName, binaryDiskBlob);
+        });
+    }
+
+    function createEmptyCanvas(modeNumber)
+    {
+      if(!modeTable.hasOwnProperty(modeNumber))
+      {
+        alert("Error Screen dump mode not supported");
+        return;
+      }
+
+      var modeInfo = modeTable[modeNumber];
+      canvasId = "beebScreen" + modeNumber;
+
+      var canvasTag = '<canvas class="canvas" id="' + canvasId + '" width="' + modeInfo.width + '" height="' + modeInfo.height + '"></canvas>';
+
+      $("#imageHolder").empty().append(canvasTag);
+
+      var canvasElement = document.getElementById(canvasId);
+      var context = canvasElement.getContext("2d");
+      var firstColor = colorPalettes[modeInfo.colors][0];
+
+      var fillstyle = "rgba(" + firstColor.r + "," + firstColor.g + "," + firstColor.b + "," + firstColor.a + ")";
+
+      context.fillStyle = fillstyle;
+      context.fillRect(0, 0, modeInfo.width, modeInfo.height);
+
+    }
+
+    function setPixel(imageData, x, y, r, g, b, a)
+    {
+      var index = (x + y * imageData.width) * 4;
+      imageData.data[index + 0] = r;
+      imageData.data[index + 1] = g;
+      imageData.data[index + 2] = b;
+      imageData.data[index + 3] = a;
+    }
+
+    // Utility functions
+    function networkGet(url)
+    {
+      return $.ajax({ method: "GET", url: url, cache: false });
+    };
+
+    function networkGetBinaryBlob(url, screenName)
+    {
+      var loadComplete = $.Deferred();
+
+      var request = new XMLHttpRequest();
+      request.open("GET", url, true);
+      request.responseType = "arraybuffer";
+
+      request.onload = function (loadEvent)
+      {
+        loadComplete.resolve(request.response);
+      }
+
+      request.send();
+
+      return loadComplete.promise();
+    }
+
+    function getSixteenBitValueFromBinary(startPos)
+    {
+      var tempArray = new Uint8Array(binaryDiskBlob, startPos, 2);
+      var result = (tempArray[1] << 8) + tempArray[0];
+      return result;
+    }
+
+    function getEightBitValueFromBinary(startPos)
+    {
+      var result = new Uint8Array(binaryDiskBlob, startPos, 1)[0];
+      return result;
+    }
+
+    function getSevenBitValueFromBinary(startPos)
+    {
+      var result = getEightBitValueFromBinary(startPos);
+      return  result & 0x7F;
+    }
+
+    function getSevenBitCharFromBinary(startPos)
+    {
+      var result = getSevenBitValueFromBinary(startPos);
+      return String.fromCharCode(result);
+    }
+
+    function getTopBitSetFromBinary(startPos)
+    {
+      var result = new Uint8Array(binaryDiskBlob, startPos, 1)[0] & 0x80;
+      return (result === 128);
+    }
+
+    function getStringFromBinary(startPos, length)
+    {
+      var tempBuffer = new Uint8Array(binaryDiskBlob, startPos, length);
+      return (String.fromCharCode.apply(null, tempBuffer)).trim();
+    }
+
+    function downloadBinaryData(fileName, fileData)
+    {
+      var blob = new Blob([fileData], { type: "application/octet-stream" });
+      var b64Url = URL.createObjectURL(blob);
+
+      var anchorTag = document.createElement("a");
+      anchorTag.download = fileName;
+      anchorTag.href = b64Url;
+      anchorTag.id = 'downloadLink';
+      anchorTag.style.display = "none";
+      document.body.appendChild(anchorTag);
+      anchorTag.click();
+
+      // Wait 2 seconds then remove the link
+      setTimeout(function() {
+          var aTag = document.getElementById("downloadLink");
+          aTag.parentNode.removeChild(aTag);
+        },
+        2000);
+    }
+
+    // Main runtime entry point here
+    loadScreensTable();
+
+  </script>
+
+</body>
+
+
+
+
+</html>
